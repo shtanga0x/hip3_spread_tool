@@ -309,11 +309,17 @@ select:focus {
   text-decoration: underline;
 }
 
-.pnl-grid-3 {
+.pnl-grid-4 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+@media (max-width: 1100px) {
+  .pnl-grid-4 {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .pnl-card {
@@ -409,6 +415,103 @@ select:focus {
   font-size: 11px;
   color: #484f58;
   font-style: italic;
+}
+
+/* APR */
+.pnl-apr {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0 10px;
+  text-align: center;
+}
+
+.pnl-apr-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8b949e;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.pnl-apr-value {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: monospace;
+}
+
+.pnl-apr-value.profit { color: #3fb950; }
+.pnl-apr-value.loss { color: #f85149; }
+.pnl-apr-value.neutral { color: #8b949e; }
+
+/* Fee inputs */
+.fee-inputs {
+  margin: 6px 0;
+}
+
+.fee-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.fee-label {
+  font-size: 12px;
+  color: #8b949e;
+}
+
+.fee-field {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.fee-input {
+  width: 60px;
+  padding: 3px 6px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  color: #c9d1d9;
+  font-size: 12px;
+  font-family: monospace;
+  text-align: right;
+}
+
+.fee-input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.fee-unit {
+  padding: 3px 6px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 0 4px 4px 0;
+  color: #8b949e;
+  font-size: 12px;
+}
+
+/* Cumulative legend checkboxes */
+.cum-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #c9d1d9;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cum-legend-item input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  accent-color: #58a6ff;
+  cursor: pointer;
 }
 
 .pnl-card-row {

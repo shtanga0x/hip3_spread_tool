@@ -17,6 +17,8 @@ let state = {
   fundingData2: [],
   candles1: [],
   candles2: [],
+  // Cumulative chart visibility
+  cumVis: { funding: true, spread: true, fees: true, total: true },
 };
 
 // ── Charts ──
@@ -26,6 +28,11 @@ let fundingSeries2 = null;
 let spreadChart = null;
 let spreadLineSeries = null;
 let spreadCandleSeries = null;
+let cumChart = null;
+let cumFundingSeries = null;
+let cumSpreadSeries = null;
+let cumFeesSeries = null;
+let cumTotalSeries = null;
 
 // ── DOM refs ──
 const $asset1 = document.getElementById('input-asset1');
@@ -43,6 +50,8 @@ const $status = document.getElementById('status');
 const $chartsSection = document.getElementById('charts-section');
 const $fundingLegend = document.getElementById('funding-legend');
 const $spreadLegend = document.getElementById('spread-legend');
+const $cumulativeSection = document.getElementById('cumulative-section');
+const $cumulativeLegend = document.getElementById('cumulative-legend');
 
 // ── Helpers ──
 
@@ -139,6 +148,12 @@ const COLOR2 = '#f0883e';
 const SPREAD_UP = '#3fb950';
 const SPREAD_DOWN = '#f85149';
 
+// Cumulative chart colors
+const CUM_FUNDING_COLOR = '#a371f7';   // purple
+const CUM_SPREAD_COLOR = '#58a6ff';    // blue
+const CUM_FEES_COLOR = '#f85149';      // red
+const CUM_TOTAL_COLOR = '#3fb950';     // green
+
 function createFundingChart() {
   const container = document.getElementById('funding-chart');
   container.innerHTML = '';
@@ -200,6 +215,56 @@ function createSpreadChart() {
   new ResizeObserver(entries => {
     const { width } = entries[0].contentRect;
     spreadChart.applyOptions({ width });
+  }).observe(container);
+}
+
+function createCumulativeChart() {
+  const container = document.getElementById('cumulative-chart');
+  container.innerHTML = '';
+  cumChart = LightweightCharts.createChart(container, {
+    ...CHART_OPTS,
+    width: container.clientWidth,
+    height: 350,
+  });
+
+  const dolFmt = { type: 'custom', formatter: v => {
+    const sign = v >= 0 ? '+' : '-';
+    const abs = Math.abs(v);
+    return sign + '$' + (abs >= 1000 ? abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : abs.toFixed(2));
+  }};
+
+  cumFundingSeries = cumChart.addLineSeries({
+    color: CUM_FUNDING_COLOR,
+    lineWidth: 2,
+    priceFormat: dolFmt,
+    visible: state.cumVis.funding,
+  });
+
+  cumSpreadSeries = cumChart.addLineSeries({
+    color: CUM_SPREAD_COLOR,
+    lineWidth: 2,
+    priceFormat: dolFmt,
+    visible: state.cumVis.spread,
+  });
+
+  cumFeesSeries = cumChart.addLineSeries({
+    color: CUM_FEES_COLOR,
+    lineWidth: 2,
+    lineStyle: 2, // dashed
+    priceFormat: dolFmt,
+    visible: state.cumVis.fees,
+  });
+
+  cumTotalSeries = cumChart.addLineSeries({
+    color: CUM_TOTAL_COLOR,
+    lineWidth: 3,
+    priceFormat: dolFmt,
+    visible: state.cumVis.total,
+  });
+
+  new ResizeObserver(entries => {
+    const { width } = entries[0].contentRect;
+    cumChart.applyOptions({ width });
   }).observe(container);
 }
 
@@ -282,11 +347,40 @@ function updateLegends() {
     `<span class="legend-item">${label2} − ${label1}${unit}</span>`;
 }
 
+// ── Cumulative legend with checkboxes ──
+
+function renderCumulativeLegend() {
+  const items = [
+    { key: 'funding', label: 'Cum. Funding', color: CUM_FUNDING_COLOR },
+    { key: 'spread', label: 'Cum. Spread', color: CUM_SPREAD_COLOR },
+    { key: 'fees', label: 'Fees', color: CUM_FEES_COLOR },
+    { key: 'total', label: 'Total P&L', color: CUM_TOTAL_COLOR },
+  ];
+
+  $cumulativeLegend.innerHTML = items.map(it => `
+    <label class="cum-legend-item">
+      <input type="checkbox" data-key="${it.key}" ${state.cumVis[it.key] ? 'checked' : ''} />
+      <span class="legend-dot" style="background:${it.color}"></span>
+      ${it.label}
+    </label>
+  `).join('');
+
+  $cumulativeLegend.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const key = cb.dataset.key;
+      state.cumVis[key] = cb.checked;
+      if (cumChart) {
+        const map = { funding: cumFundingSeries, spread: cumSpreadSeries, fees: cumFeesSeries, total: cumTotalSeries };
+        map[key].applyOptions({ visible: cb.checked });
+      }
+    });
+  });
+}
+
 // ── Spread chart markers for best entry/exit ──
 
 function setSpreadMarkers(bestEntryT, bestExitT) {
   const markers = [];
-  // Markers must be sorted by time
   const times = [
     { t: tsToUTC(bestEntryT), type: 'entry' },
     { t: tsToUTC(bestExitT), type: 'exit' },
@@ -294,25 +388,12 @@ function setSpreadMarkers(bestEntryT, bestExitT) {
 
   for (const m of times) {
     if (m.type === 'entry') {
-      markers.push({
-        time: m.t,
-        position: 'belowBar',
-        color: '#3fb950',
-        shape: 'arrowUp',
-        text: 'Best Entry',
-      });
+      markers.push({ time: m.t, position: 'belowBar', color: '#3fb950', shape: 'arrowUp', text: 'Best Entry' });
     } else {
-      markers.push({
-        time: m.t,
-        position: 'aboveBar',
-        color: '#f85149',
-        shape: 'arrowDown',
-        text: 'Best Exit',
-      });
+      markers.push({ time: m.t, position: 'aboveBar', color: '#f85149', shape: 'arrowDown', text: 'Best Exit' });
     }
   }
 
-  // Set on whichever series is visible
   if (state.candleMode) {
     spreadCandleSeries.setMarkers(markers);
     spreadLineSeries.setMarkers([]);
@@ -339,7 +420,6 @@ function renderSpread() {
   spreadLineSeries.applyOptions({ visible: !state.candleMode });
   spreadCandleSeries.applyOptions({ visible: state.candleMode });
 
-  // Place best entry/exit markers
   const aligned = getAlignedSpreadData();
   if (aligned.length >= 2) {
     let bestEntry = aligned[0], bestExit = aligned[0];
@@ -354,15 +434,17 @@ function renderSpread() {
   updateLegends();
 }
 
-// ── Sync crosshairs ──
+// ── Sync crosshairs across all charts ──
 
-function syncCrosshairs(src, dst) {
+function syncCrosshair(src, targets, refSeries) {
   src.subscribeCrosshairMove(param => {
-    if (!param || !param.time) {
-      dst.clearCrosshairPosition();
-      return;
+    for (const { chart, series } of targets) {
+      if (!param || !param.time) {
+        chart.clearCrosshairPosition();
+      } else {
+        chart.setCrosshairPosition(undefined, param.time, series);
+      }
     }
-    dst.setCrosshairPosition(undefined, param.time, dst.options().rightPriceScale ? spreadLineSeries : fundingSeries1);
   });
 }
 
@@ -408,6 +490,7 @@ async function loadData() {
 
     createFundingChart();
     createSpreadChart();
+    createCumulativeChart();
 
     const fd1 = buildFundingData(funding1);
     const fd2 = buildFundingData(funding2);
@@ -416,12 +499,25 @@ async function loadData() {
     fundingChart.timeScale().fitContent();
 
     renderSpread();
+    renderCumulativeLegend();
 
-    syncCrosshairs(fundingChart, spreadChart);
-    syncCrosshairs(spreadChart, fundingChart);
+    // Sync crosshairs across all 3 charts
+    syncCrosshair(fundingChart, [
+      { chart: spreadChart, series: spreadLineSeries },
+      { chart: cumChart, series: cumTotalSeries },
+    ]);
+    syncCrosshair(spreadChart, [
+      { chart: fundingChart, series: fundingSeries1 },
+      { chart: cumChart, series: cumTotalSeries },
+    ]);
+    syncCrosshair(cumChart, [
+      { chart: fundingChart, series: fundingSeries1 },
+      { chart: spreadChart, series: spreadLineSeries },
+    ]);
 
     $chartsSection.style.display = '';
     $pnlSection.style.display = '';
+    $cumulativeSection.style.display = '';
     renderPnL();
     setStatus(`Loaded ${candles1.length} + ${candles2.length} candles, ${fd1.length} + ${fd2.length} funding points`);
   } catch (e) {
@@ -564,36 +660,116 @@ function getAlignedSpreadData() {
   return aligned;
 }
 
-// Compute funding P&L for a given direction.
-// LONG coin pays funding; SHORT coin receives funding (when rate > 0).
-// Funding is hourly on Hyperliquid. P&L per snapshot:
-//   LONG:  -posSize × rate
-//   SHORT: +posSize × rate
 function computeFundingPnl(posSize, longFundingData, shortFundingData) {
-  let total = 0;
   let longTotal = 0;
   let shortTotal = 0;
-  // LONG pays funding: P&L = -posSize × rate (positive rate = you pay)
   for (const d of longFundingData) {
-    const r = parseFloat(d.fundingRate);
-    longTotal += -posSize * r;
+    longTotal += -posSize * parseFloat(d.fundingRate);
   }
-  // SHORT receives funding: P&L = +posSize × rate (positive rate = you receive)
   for (const d of shortFundingData) {
-    const r = parseFloat(d.fundingRate);
-    shortTotal += posSize * r;
+    shortTotal += posSize * parseFloat(d.fundingRate);
   }
-  total = longTotal + shortTotal;
-  return { total, longTotal, shortTotal };
+  return { total: longTotal + shortTotal, longTotal, shortTotal };
 }
 
-// Spread P&L: LONG one, SHORT the other with equal $ notional
 function calcSpreadPnl(posSize, longEntry, shortEntry, longExit, shortExit) {
   if (longEntry <= 0 || shortEntry <= 0 || posSize <= 0) return { dollar: 0, pct: 0 };
   const lPnl = posSize * (longExit / longEntry - 1);
   const sPnl = posSize * (1 - shortExit / shortEntry);
   const total = lPnl + sPnl;
   return { dollar: total, pct: (total / posSize) * 100 };
+}
+
+function getFeePcts() {
+  const makerEl = document.getElementById('input-maker-fee');
+  const takerEl = document.getElementById('input-taker-fee');
+  const maker = makerEl ? parseFloat(makerEl.value) || 0 : 0.02;
+  const taker = takerEl ? parseFloat(takerEl.value) || 0 : 0.07;
+  return { maker: maker / 100, taker: taker / 100 };
+}
+
+// ── Cumulative P&L chart data ──
+
+function renderCumulativeChart(longCoin, longCoin1) {
+  const posSize = parseInt($positionSize.value) || 0;
+  if (posSize <= 0 || !cumChart) return;
+
+  const { fundingData1, fundingData2, candles1, candles2 } = state;
+  const aligned = getAlignedSpreadData();
+  if (aligned.length < 2) return;
+
+  const { maker, taker } = getFeePcts();
+  // Entry + exit: 2 legs each = 4 trades. Assume taker for all.
+  const totalFeeCost = -(posSize * 2 * taker + posSize * 2 * taker);
+
+  // ── Cumulative funding P&L over time ──
+  // Align funding to candle timestamps via nearest-hour lookup
+  const longFunding = longCoin1 ? fundingData1 : fundingData2;
+  const shortFunding = longCoin1 ? fundingData2 : fundingData1;
+
+  // Build cumulative funding by hour
+  const fundingByTime = new Map();
+  let cumFund = 0;
+  // Merge and sort both funding arrays by time
+  const allFunding = [];
+  for (const d of longFunding) {
+    allFunding.push({ t: d.time, long: parseFloat(d.fundingRate), short: 0 });
+  }
+  const shortMap = new Map();
+  for (const d of shortFunding) {
+    shortMap.set(d.time, parseFloat(d.fundingRate));
+  }
+  for (const f of allFunding) {
+    const sr = shortMap.get(f.t) || 0;
+    f.short = sr;
+  }
+  allFunding.sort((a, b) => a.t - b.t);
+
+  const cumFundingData = [];
+  cumFund = 0;
+  for (const f of allFunding) {
+    cumFund += -posSize * f.long + posSize * f.short;
+    cumFundingData.push({ time: tsToUTC(f.t), value: cumFund });
+  }
+
+  // ── Cumulative spread P&L over time (unrealized, entry at first candle) ──
+  const entry = aligned[0];
+  function longP(pt) { return longCoin1 ? pt.p1 : pt.p2; }
+  function shortP(pt) { return longCoin1 ? pt.p2 : pt.p1; }
+
+  const le = longP(entry), se = shortP(entry);
+  const cumSpreadData = aligned.map(pt => {
+    const lPnl = posSize * (longP(pt) / le - 1);
+    const sPnl = posSize * (1 - shortP(pt) / se);
+    return { time: tsToUTC(pt.t), value: lPnl + sPnl };
+  });
+
+  // ── Fees: flat line ──
+  const cumFeesData = aligned.map(pt => ({ time: tsToUTC(pt.t), value: totalFeeCost }));
+
+  // ── Total P&L: cumulative funding + cumulative spread + fees ──
+  // Need to align funding to candle timestamps
+  const fundMap = new Map();
+  for (const d of cumFundingData) fundMap.set(d.time, d.value);
+
+  // Interpolate: at each candle time, use latest funding value
+  let lastFundVal = 0;
+  const cumTotalData = aligned.map(pt => {
+    const t = tsToUTC(pt.t);
+    if (fundMap.has(t)) lastFundVal = fundMap.get(t);
+    // Find closest funding <= this time
+    for (const fd of cumFundingData) {
+      if (fd.time <= t) lastFundVal = fd.value;
+    }
+    const spreadPnl = cumSpreadData.find(d => d.time === t)?.value || 0;
+    return { time: t, value: lastFundVal + spreadPnl + totalFeeCost };
+  });
+
+  cumFundingSeries.setData(cumFundingData);
+  cumSpreadSeries.setData(cumSpreadData);
+  cumFeesSeries.setData(cumFeesData);
+  cumTotalSeries.setData(cumTotalData);
+  cumChart.timeScale().fitContent();
 }
 
 function renderPnL() {
@@ -606,26 +782,26 @@ function renderPnL() {
   const posSize = parseInt($positionSize.value) || 0;
   const { coin1, coin2, fundingData1, fundingData2 } = state;
 
-  // ── Determine optimal LONG/SHORT direction from funding ──
-  // Try both directions, pick the one that makes funding P&L positive
-  const fundingA = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData1, fundingData2); // LONG coin1, SHORT coin2
-  const fundingB = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData2, fundingData1); // LONG coin2, SHORT coin1
+  // Determine optimal LONG/SHORT from funding
+  const fundingA = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData1, fundingData2);
+  const fundingB = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData2, fundingData1);
 
   const longCoin1Better = fundingA.total >= fundingB.total;
-  const fundingResult = longCoin1Better ? fundingA : fundingB;
   const longCoin = longCoin1Better ? coin1 : coin2;
   const shortCoin = longCoin1Better ? coin2 : coin1;
 
   function longP(pt) { return longCoin === coin1 ? pt.p1 : pt.p2; }
   function shortP(pt) { return longCoin === coin1 ? pt.p2 : pt.p1; }
 
-  // Recalculate funding with actual posSize
   const funding = posSize > 0 ? (longCoin1Better ? fundingA : fundingB) : { total: 0, longTotal: 0, shortTotal: 0 };
   const fundingPct = posSize > 0 ? (funding.total / posSize) * 100 : 0;
 
-  // ── Current Spread P&L: entry at period mid, exit at current ──
+  // APR = funding return annualized
+  const periodDays = state.period;
+  const fundingAPR = periodDays > 0 && posSize > 0 ? (funding.total / posSize) * (365 / periodDays) * 100 : 0;
+
+  // Current Spread P&L
   const current = aligned[aligned.length - 1];
-  // Mid prices = average close price over the period for each asset
   let sumP1 = 0, sumP2 = 0;
   for (const pt of aligned) { sumP1 += pt.p1; sumP2 += pt.p2; }
   const midP1 = sumP1 / aligned.length;
@@ -641,16 +817,11 @@ function renderPnL() {
   const entrySpread = (longCoin === coin1) ? (midP1 - midP2) : (midP2 - midP1);
   const exitSpread = longP(current) - shortP(current);
 
-  // ── Best Entry → Best Exit P&L ──
-  // Best entry = where spread (longP - shortP) is smallest → cheapest to enter
-  // Best exit = where spread is largest → most to gain
+  // Best Entry → Best Exit
   let bestEntry = aligned[0], bestExit = aligned[0];
   for (const pt of aligned) {
-    const s = longP(pt) - shortP(pt);
-    const sBest = longP(bestEntry) - shortP(bestEntry);
-    const sExit = longP(bestExit) - shortP(bestExit);
-    if (s < sBest) bestEntry = pt;
-    if (s > sExit) bestExit = pt;
+    if ((longP(pt) - shortP(pt)) < (longP(bestEntry) - shortP(bestEntry))) bestEntry = pt;
+    if ((longP(pt) - shortP(pt)) > (longP(bestExit) - shortP(bestExit))) bestExit = pt;
   }
 
   const bestSpreadPnl = posSize > 0
@@ -660,12 +831,17 @@ function renderPnL() {
   const bestEntrySpread = longP(bestEntry) - shortP(bestEntry);
   const bestExitSpread = longP(bestExit) - shortP(bestExit);
 
-  // Update markers on spread chart
-  if (spreadChart) {
-    setSpreadMarkers(bestEntry.t, bestExit.t);
-  }
+  if (spreadChart) setSpreadMarkers(bestEntry.t, bestExit.t);
+
+  // Fees
+  const { maker, taker } = getFeePcts();
+  // Entry: 2 legs (LONG + SHORT), Exit: 2 legs
+  const entryFee = posSize * 2 * taker;
+  const exitFee = posSize * 2 * taker;
+  const totalFees = entryFee + exitFee;
 
   const cls = v => v > 0.005 ? 'profit' : v < -0.005 ? 'loss' : 'neutral';
+  const aprCls = cls(fundingAPR);
 
   function cardRow(label, val) {
     return `<div class="pnl-card-row"><span class="label">${label}</span><span class="value">${val}</span></div>`;
@@ -686,16 +862,20 @@ function renderPnL() {
       <div class="leg direction-note">Direction chosen to maximize funding P&L</div>
     </div>
 
-    <div class="pnl-grid-3">
+    <div class="pnl-grid-4">
       <!-- Box 1: Funding P&L -->
       <div class="pnl-card">
         <div class="pnl-card-label">Funding P&L</div>
-        <div class="pnl-card-sublabel">${fundingHours} hourly snapshots</div>
+        <div class="pnl-card-sublabel">${fundingHours} hourly snapshots · ${periodDays}d</div>
         <div class="pnl-big-value ${cls(funding.total)}">
           ${posSize > 0 ? fmtUSD(funding.total) : '—'}
         </div>
         <div class="pnl-big-pct ${cls(funding.total)}">
           ${posSize > 0 ? fmtPct(fundingPct) : ''}
+        </div>
+        <div class="pnl-apr">
+          <div class="pnl-apr-label">Funding APR</div>
+          <div class="pnl-apr-value ${aprCls}">${posSize > 0 ? fmtPct(fundingAPR) : '—'}</div>
         </div>
         ${cardRow('LONG ' + longCoin, posSize > 0 ? fmtUSD(funding.longTotal) : '—')}
         ${cardRow('SHORT ' + shortCoin, posSize > 0 ? fmtUSD(funding.shortTotal) : '—')}
@@ -752,8 +932,52 @@ function renderPnL() {
         <div class="pnl-card-separator"></div>
         ${cardRow('Spread change', fmtSpread$(bestExitSpread - bestEntrySpread))}
       </div>
+
+      <!-- Box 4: Trading Fees -->
+      <div class="pnl-card">
+        <div class="pnl-card-label">Trading Fees</div>
+        <div class="pnl-card-sublabel">Entry + Exit commissions</div>
+        <div class="pnl-big-value loss">
+          ${posSize > 0 ? '-$' + totalFees.toFixed(2) : '—'}
+        </div>
+        <div class="pnl-big-pct loss">
+          ${posSize > 0 ? '-' + ((totalFees / posSize) * 100).toFixed(4) + '%' : ''}
+        </div>
+        <div class="fee-inputs">
+          <div class="fee-input-row">
+            <span class="fee-label">Maker fee</span>
+            <div class="fee-field">
+              <input type="text" id="input-maker-fee" value="0.02" class="fee-input" />
+              <span class="fee-unit">%</span>
+            </div>
+          </div>
+          <div class="fee-input-row">
+            <span class="fee-label">Taker fee</span>
+            <div class="fee-field">
+              <input type="text" id="input-taker-fee" value="0.07" class="fee-input" />
+              <span class="fee-unit">%</span>
+            </div>
+          </div>
+        </div>
+        <div class="pnl-card-separator"></div>
+        ${cardRow('Entry (2 legs)', posSize > 0 ? '-$' + entryFee.toFixed(2) : '—')}
+        ${cardRow('Exit (2 legs)', posSize > 0 ? '-$' + exitFee.toFixed(2) : '—')}
+        <div class="pnl-card-note">
+          HIP-3 fees are 2× standard.<br>
+          Using taker rate for all trades.
+        </div>
+      </div>
     </div>
   `;
+
+  // Attach fee input listeners (re-created each render)
+  const makerEl = document.getElementById('input-maker-fee');
+  const takerEl = document.getElementById('input-taker-fee');
+  if (makerEl) makerEl.addEventListener('input', () => renderPnL());
+  if (takerEl) takerEl.addEventListener('input', () => renderPnL());
+
+  // Render cumulative chart
+  renderCumulativeChart(longCoin, longCoin === coin1);
 }
 
 // ── Event listeners ──
