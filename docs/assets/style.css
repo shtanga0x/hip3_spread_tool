@@ -309,9 +309,9 @@ select:focus {
   text-decoration: underline;
 }
 
-.pnl-grid {
+.pnl-grid-3 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -334,12 +334,50 @@ select:focus {
 }
 
 .pnl-card-label {
+  font-size: 12px;
+  color: #c9d1d9;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.pnl-card-sublabel {
   font-size: 11px;
-  color: #8b949e;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
+  color: #6e7681;
+  margin-bottom: 8px;
+}
+
+.pnl-big-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: monospace;
+  margin-bottom: 0;
+}
+
+.pnl-big-value.profit { color: #3fb950; }
+.pnl-big-value.loss { color: #f85149; }
+.pnl-big-value.neutral { color: #8b949e; }
+
+.pnl-big-pct {
+  font-size: 13px;
   font-weight: 600;
+  font-family: monospace;
+  margin-bottom: 10px;
+}
+
+.pnl-big-pct.profit { color: #3fb950; }
+.pnl-big-pct.loss { color: #f85149; }
+.pnl-big-pct.neutral { color: #8b949e; }
+
+.pnl-card-separator {
+  border-top: 1px solid #21262d;
+  margin: 6px 0;
+}
+
+.pnl-card-note {
+  font-size: 10px;
+  color: #484f58;
+  margin-top: 8px;
+  line-height: 1.4;
 }
 
 .pnl-card-time {
@@ -347,6 +385,30 @@ select:focus {
   color: #6e7681;
   margin-bottom: 4px;
   font-family: monospace;
+}
+
+.pnl-best-marker {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.pnl-best-marker.entry-marker {
+  color: #3fb950;
+}
+
+.pnl-best-marker.exit-marker {
+  color: #f85149;
+}
+
+.pnl-best-marker .marker-arrow {
+  font-size: 10px;
+}
+
+.direction-note {
+  font-size: 11px;
+  color: #484f58;
+  font-style: italic;
 }
 
 .pnl-card-row {
@@ -377,86 +439,6 @@ select:focus {
 .spread-effect.negative {
   color: #f85149;
 }
-
-.pnl-result {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  padding: 10px 14px;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  border-radius: 6px;
-}
-
-.pnl-result-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.pnl-result-label {
-  font-size: 11px;
-  color: #8b949e;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.pnl-result-value {
-  font-size: 18px;
-  font-weight: 700;
-  font-family: monospace;
-}
-
-.pnl-result-value.profit {
-  color: #3fb950;
-}
-
-.pnl-result-value.loss {
-  color: #f85149;
-}
-
-.pnl-result-value.neutral {
-  color: #8b949e;
-}
-
-.pnl-divider {
-  width: 1px;
-  height: 36px;
-  background: #30363d;
-}
-
-/* Formula */
-.pnl-formula {
-  margin-top: 12px;
-  padding: 10px 14px;
-  background: #0d111766;
-  border: 1px solid #21262d;
-  border-radius: 6px;
-}
-
-.pnl-formula-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #8b949e;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
-}
-
-.pnl-formula-text {
-  font-size: 12px;
-  color: #8b949e;
-  line-height: 1.7;
-  font-family: monospace;
-}
-
-.pnl-formula-text b {
-  color: #c9d1d9;
-}
-
-.pnl-formula-text .profit { color: #3fb950; }
-.pnl-formula-text .loss { color: #f85149; }
-.pnl-formula-text .neutral { color: #8b949e; }
 
 /* Status */
 #status {

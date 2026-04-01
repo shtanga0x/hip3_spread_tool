@@ -11,8 +11,8 @@ let state = {
   interval: '1h',
   period: 7,
   spreadSwapped: false,
-  candleMode: false,      // false = line, true = candle
-  spreadPct: true,        // true = % spread, false = $ spread
+  candleMode: false,
+  spreadPct: true,
   fundingData1: [],
   fundingData2: [],
   candles1: [],
@@ -212,8 +212,6 @@ function buildFundingData(raw) {
   }));
 }
 
-// Compute spread for a single candle pair.
-// pct=true: percentage of midpoint.  pct=false: absolute $.
 function spreadVal(v2, v1, swapped, mid) {
   const raw = swapped ? (v1 - v2) : (v2 - v1);
   return mid > 0 ? (raw / mid) * 100 : raw;
@@ -284,6 +282,46 @@ function updateLegends() {
     `<span class="legend-item">${label2} − ${label1}${unit}</span>`;
 }
 
+// ── Spread chart markers for best entry/exit ──
+
+function setSpreadMarkers(bestEntryT, bestExitT) {
+  const markers = [];
+  // Markers must be sorted by time
+  const times = [
+    { t: tsToUTC(bestEntryT), type: 'entry' },
+    { t: tsToUTC(bestExitT), type: 'exit' },
+  ].sort((a, b) => a.t - b.t);
+
+  for (const m of times) {
+    if (m.type === 'entry') {
+      markers.push({
+        time: m.t,
+        position: 'belowBar',
+        color: '#3fb950',
+        shape: 'arrowUp',
+        text: 'Best Entry',
+      });
+    } else {
+      markers.push({
+        time: m.t,
+        position: 'aboveBar',
+        color: '#f85149',
+        shape: 'arrowDown',
+        text: 'Best Exit',
+      });
+    }
+  }
+
+  // Set on whichever series is visible
+  if (state.candleMode) {
+    spreadCandleSeries.setMarkers(markers);
+    spreadLineSeries.setMarkers([]);
+  } else {
+    spreadLineSeries.setMarkers(markers);
+    spreadCandleSeries.setMarkers([]);
+  }
+}
+
 function renderSpread() {
   const lineData = buildSpreadLine(state.candles1, state.candles2, state.spreadSwapped, state.spreadPct);
   const candleData = buildSpreadCandles(state.candles1, state.candles2, state.spreadSwapped, state.spreadPct);
@@ -300,6 +338,17 @@ function renderSpread() {
 
   spreadLineSeries.applyOptions({ visible: !state.candleMode });
   spreadCandleSeries.applyOptions({ visible: state.candleMode });
+
+  // Place best entry/exit markers
+  const aligned = getAlignedSpreadData();
+  if (aligned.length >= 2) {
+    let bestEntry = aligned[0], bestExit = aligned[0];
+    for (const pt of aligned) {
+      if (pt.spreadAbs < bestEntry.spreadAbs) bestEntry = pt;
+      if (pt.spreadAbs > bestExit.spreadAbs) bestExit = pt;
+    }
+    setSpreadMarkers(bestEntry.t, bestExit.t);
+  }
 
   spreadChart.timeScale().fitContent();
   updateLegends();
@@ -447,19 +496,6 @@ $fileUpload.addEventListener('change', async (e) => {
 });
 
 // ── PnL Analysis ──
-//
-// Spread trade: equal $ notional on each leg.
-//   Position size = $ per leg (you deploy posSize LONG + posSize SHORT).
-//
-//   LONG leg P&L  = posSize × (P_long_exit / P_long_entry − 1)
-//   SHORT leg P&L = posSize × (1 − P_short_exit / P_short_entry)
-//   Total P&L     = LONG P&L + SHORT P&L
-//
-// For nearly-equal prices (same underlying, different dex):
-//   ≈ posSize × (spread_exit − spread_entry) / avg_price
-//
-// Return % = Total P&L / posSize × 100  (on per-leg capital)
-//
 
 const $positionSize = document.getElementById('input-position-size');
 const $pnlSection = document.getElementById('pnl-section');
@@ -528,6 +564,38 @@ function getAlignedSpreadData() {
   return aligned;
 }
 
+// Compute funding P&L for a given direction.
+// LONG coin pays funding; SHORT coin receives funding (when rate > 0).
+// Funding is hourly on Hyperliquid. P&L per snapshot:
+//   LONG:  -posSize × rate
+//   SHORT: +posSize × rate
+function computeFundingPnl(posSize, longFundingData, shortFundingData) {
+  let total = 0;
+  let longTotal = 0;
+  let shortTotal = 0;
+  // LONG pays funding: P&L = -posSize × rate (positive rate = you pay)
+  for (const d of longFundingData) {
+    const r = parseFloat(d.fundingRate);
+    longTotal += -posSize * r;
+  }
+  // SHORT receives funding: P&L = +posSize × rate (positive rate = you receive)
+  for (const d of shortFundingData) {
+    const r = parseFloat(d.fundingRate);
+    shortTotal += posSize * r;
+  }
+  total = longTotal + shortTotal;
+  return { total, longTotal, shortTotal };
+}
+
+// Spread P&L: LONG one, SHORT the other with equal $ notional
+function calcSpreadPnl(posSize, longEntry, shortEntry, longExit, shortExit) {
+  if (longEntry <= 0 || shortEntry <= 0 || posSize <= 0) return { dollar: 0, pct: 0 };
+  const lPnl = posSize * (longExit / longEntry - 1);
+  const sPnl = posSize * (1 - shortExit / shortEntry);
+  const total = lPnl + sPnl;
+  return { dollar: total, pct: (total / posSize) * 100 };
+}
+
 function renderPnL() {
   const aligned = getAlignedSpreadData();
   if (aligned.length < 2) {
@@ -536,60 +604,74 @@ function renderPnL() {
   }
 
   const posSize = parseInt($positionSize.value) || 0;
-  const { spreadSwapped, coin1, coin2 } = state;
+  const { coin1, coin2, fundingData1, fundingData2 } = state;
 
-  // LONG the asset being added (numerator in spread formula)
-  // If not swapped: spread = coin2 − coin1 → LONG coin2, SHORT coin1
-  // If swapped:     spread = coin1 − coin2 → LONG coin1, SHORT coin2
-  const longCoin = spreadSwapped ? coin1 : coin2;
-  const shortCoin = spreadSwapped ? coin2 : coin1;
+  // ── Determine optimal LONG/SHORT direction from funding ──
+  // Try both directions, pick the one that makes funding P&L positive
+  const fundingA = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData1, fundingData2); // LONG coin1, SHORT coin2
+  const fundingB = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData2, fundingData1); // LONG coin2, SHORT coin1
 
-  const entry = aligned[0];
-  const exit = aligned[aligned.length - 1];
+  const longCoin1Better = fundingA.total >= fundingB.total;
+  const fundingResult = longCoin1Better ? fundingA : fundingB;
+  const longCoin = longCoin1Better ? coin1 : coin2;
+  const shortCoin = longCoin1Better ? coin2 : coin1;
 
-  // Best entry = min spread (cheapest), best exit = max spread (most profitable exit)
-  let bestEntry = aligned[0];
-  let bestExit = aligned[0];
+  function longP(pt) { return longCoin === coin1 ? pt.p1 : pt.p2; }
+  function shortP(pt) { return longCoin === coin1 ? pt.p2 : pt.p1; }
+
+  // Recalculate funding with actual posSize
+  const funding = posSize > 0 ? (longCoin1Better ? fundingA : fundingB) : { total: 0, longTotal: 0, shortTotal: 0 };
+  const fundingPct = posSize > 0 ? (funding.total / posSize) * 100 : 0;
+
+  // ── Current Spread P&L: entry at period mid, exit at current ──
+  const current = aligned[aligned.length - 1];
+  // Mid prices = average close price over the period for each asset
+  let sumP1 = 0, sumP2 = 0;
+  for (const pt of aligned) { sumP1 += pt.p1; sumP2 += pt.p2; }
+  const midP1 = sumP1 / aligned.length;
+  const midP2 = sumP2 / aligned.length;
+
+  const midLongEntry = longCoin === coin1 ? midP1 : midP2;
+  const midShortEntry = longCoin === coin1 ? midP2 : midP1;
+  const currentLongExit = longP(current);
+  const currentShortExit = shortP(current);
+
+  const currentSpreadPnl = posSize > 0 ? calcSpreadPnl(posSize, midLongEntry, midShortEntry, currentLongExit, currentShortExit) : { dollar: 0, pct: 0 };
+
+  const entrySpread = (longCoin === coin1) ? (midP1 - midP2) : (midP2 - midP1);
+  const exitSpread = longP(current) - shortP(current);
+
+  // ── Best Entry → Best Exit P&L ──
+  // Best entry = where spread (longP - shortP) is smallest → cheapest to enter
+  // Best exit = where spread is largest → most to gain
+  let bestEntry = aligned[0], bestExit = aligned[0];
   for (const pt of aligned) {
-    if (pt.spreadAbs < bestEntry.spreadAbs) bestEntry = pt;
-    if (pt.spreadAbs > bestExit.spreadAbs) bestExit = pt;
+    const s = longP(pt) - shortP(pt);
+    const sBest = longP(bestEntry) - shortP(bestEntry);
+    const sExit = longP(bestExit) - shortP(bestExit);
+    if (s < sBest) bestEntry = pt;
+    if (s > sExit) bestExit = pt;
   }
 
-  // Extract prices for long/short legs
-  function longP(pt) { return spreadSwapped ? pt.p1 : pt.p2; }
-  function shortP(pt) { return spreadSwapped ? pt.p2 : pt.p1; }
+  const bestSpreadPnl = posSize > 0
+    ? calcSpreadPnl(posSize, longP(bestEntry), shortP(bestEntry), longP(bestExit), shortP(bestExit))
+    : { dollar: 0, pct: 0 };
 
-  // P&L: equal $ notional each side
-  // LONG P&L  = posSize × (exit_price / entry_price − 1)
-  // SHORT P&L = posSize × (1 − exit_price / entry_price)
-  function calcPnl(entryPt, exitPt) {
-    const le = longP(entryPt), se = shortP(entryPt);
-    const lx = longP(exitPt), sx = shortP(exitPt);
-    if (le <= 0 || se <= 0) return { dollar: 0, pct: 0, longPnl: 0, shortPnl: 0 };
-    const lPnl = posSize * (lx / le - 1);
-    const sPnl = posSize * (1 - sx / se);
-    const total = lPnl + sPnl;
-    return { dollar: total, pct: (total / posSize) * 100, longPnl: lPnl, shortPnl: sPnl };
+  const bestEntrySpread = longP(bestEntry) - shortP(bestEntry);
+  const bestExitSpread = longP(bestExit) - shortP(bestExit);
+
+  // Update markers on spread chart
+  if (spreadChart) {
+    setSpreadMarkers(bestEntry.t, bestExit.t);
   }
 
-  const actualPnl = posSize > 0 ? calcPnl(entry, exit) : null;
-  const bestPnl = posSize > 0 ? calcPnl(bestEntry, bestExit) : null;
-
-  const pnlClass = v => v > 0.005 ? 'profit' : v < -0.005 ? 'loss' : 'neutral';
-
-  // Spread effects: how much better/worse was best vs actual
-  const entryEffectAbs = bestEntry.spreadAbs - entry.spreadAbs;
-  const exitEffectAbs = bestExit.spreadAbs - exit.spreadAbs;
-  const entryEffectPct = bestEntry.spreadPct - entry.spreadPct;
-  const exitEffectPct = bestExit.spreadPct - exit.spreadPct;
+  const cls = v => v > 0.005 ? 'profit' : v < -0.005 ? 'loss' : 'neutral';
 
   function cardRow(label, val) {
     return `<div class="pnl-card-row"><span class="label">${label}</span><span class="value">${val}</span></div>`;
   }
 
-  function spreadRows(pt) {
-    return cardRow('Spread $', fmtSpread$(pt.spreadAbs)) + cardRow('Spread %', fmtSpreadPct(pt.spreadPct));
-  }
+  const fundingHours = fundingData1.length;
 
   $pnlBody.innerHTML = `
     <div class="pnl-position-row">
@@ -601,77 +683,74 @@ function renderPnL() {
         <span class="leg-label short">Short</span>
         <a href="${coinLink(shortCoin)}" target="_blank" rel="noopener">${shortCoin}</a>
       </div>
+      <div class="leg direction-note">Direction chosen to maximize funding P&L</div>
     </div>
 
-    <div class="pnl-grid">
+    <div class="pnl-grid-3">
+      <!-- Box 1: Funding P&L -->
       <div class="pnl-card">
-        <div class="pnl-card-label">Entry (First)</div>
-        <div class="pnl-card-time">${fmtTime(entry.t)}</div>
-        ${cardRow(longCoin, fmtPrice(longP(entry)))}
-        ${cardRow(shortCoin, fmtPrice(shortP(entry)))}
-        ${spreadRows(entry)}
+        <div class="pnl-card-label">Funding P&L</div>
+        <div class="pnl-card-sublabel">${fundingHours} hourly snapshots</div>
+        <div class="pnl-big-value ${cls(funding.total)}">
+          ${posSize > 0 ? fmtUSD(funding.total) : '—'}
+        </div>
+        <div class="pnl-big-pct ${cls(funding.total)}">
+          ${posSize > 0 ? fmtPct(fundingPct) : ''}
+        </div>
+        ${cardRow('LONG ' + longCoin, posSize > 0 ? fmtUSD(funding.longTotal) : '—')}
+        ${cardRow('SHORT ' + shortCoin, posSize > 0 ? fmtUSD(funding.shortTotal) : '—')}
+        <div class="pnl-card-note">
+          LONG pays funding (−rate)<br>
+          SHORT receives funding (+rate)
+        </div>
       </div>
 
-      <div class="pnl-card highlight-best-entry">
-        <div class="pnl-card-label">Best Entry</div>
-        <div class="pnl-card-time">${fmtTime(bestEntry.t)}</div>
+      <!-- Box 2: Current Spread P&L -->
+      <div class="pnl-card">
+        <div class="pnl-card-label">Current Spread P&L</div>
+        <div class="pnl-card-sublabel">Entry @ period avg → Exit @ current</div>
+        <div class="pnl-big-value ${cls(currentSpreadPnl.dollar)}">
+          ${posSize > 0 ? fmtUSD(currentSpreadPnl.dollar) : '—'}
+        </div>
+        <div class="pnl-big-pct ${cls(currentSpreadPnl.dollar)}">
+          ${posSize > 0 ? fmtPct(currentSpreadPnl.pct) : ''}
+        </div>
+        ${cardRow('Entry ' + longCoin, fmtPrice(midLongEntry) + ' (avg)')}
+        ${cardRow('Entry ' + shortCoin, fmtPrice(midShortEntry) + ' (avg)')}
+        ${cardRow('Entry spread', fmtSpread$(entrySpread))}
+        <div class="pnl-card-separator"></div>
+        ${cardRow('Exit ' + longCoin, fmtPrice(currentLongExit))}
+        ${cardRow('Exit ' + shortCoin, fmtPrice(currentShortExit))}
+        ${cardRow('Exit spread', fmtSpread$(exitSpread))}
+        <div class="pnl-card-separator"></div>
+        ${cardRow('Spread change', fmtSpread$(exitSpread - entrySpread))}
+      </div>
+
+      <!-- Box 3: Best Entry → Best Exit P&L -->
+      <div class="pnl-card">
+        <div class="pnl-card-label">Best Spread P&L</div>
+        <div class="pnl-card-sublabel">Best entry → Best exit</div>
+        <div class="pnl-big-value ${cls(bestSpreadPnl.dollar)}">
+          ${posSize > 0 ? fmtUSD(bestSpreadPnl.dollar) : '—'}
+        </div>
+        <div class="pnl-big-pct ${cls(bestSpreadPnl.dollar)}">
+          ${posSize > 0 ? fmtPct(bestSpreadPnl.pct) : ''}
+        </div>
+        <div class="pnl-best-marker entry-marker">
+          <span class="marker-arrow">&#9650;</span> Best Entry — ${fmtTime(bestEntry.t)}
+        </div>
         ${cardRow(longCoin, fmtPrice(longP(bestEntry)))}
         ${cardRow(shortCoin, fmtPrice(shortP(bestEntry)))}
-        ${spreadRows(bestEntry)}
-        ${cardRow('vs Entry $', fmtSpread$(entryEffectAbs))}
-        ${cardRow('vs Entry %', fmtSpreadPct(entryEffectPct))}
-      </div>
-
-      <div class="pnl-card highlight-best-exit">
-        <div class="pnl-card-label">Best Exit</div>
-        <div class="pnl-card-time">${fmtTime(bestExit.t)}</div>
+        ${cardRow('Spread', fmtSpread$(bestEntrySpread))}
+        <div class="pnl-card-separator"></div>
+        <div class="pnl-best-marker exit-marker">
+          <span class="marker-arrow">&#9660;</span> Best Exit — ${fmtTime(bestExit.t)}
+        </div>
         ${cardRow(longCoin, fmtPrice(longP(bestExit)))}
         ${cardRow(shortCoin, fmtPrice(shortP(bestExit)))}
-        ${spreadRows(bestExit)}
-        ${cardRow('vs Exit $', fmtSpread$(exitEffectAbs))}
-        ${cardRow('vs Exit %', fmtSpreadPct(exitEffectPct))}
-      </div>
-
-      <div class="pnl-card">
-        <div class="pnl-card-label">Exit (Last)</div>
-        <div class="pnl-card-time">${fmtTime(exit.t)}</div>
-        ${cardRow(longCoin, fmtPrice(longP(exit)))}
-        ${cardRow(shortCoin, fmtPrice(shortP(exit)))}
-        ${spreadRows(exit)}
-      </div>
-    </div>
-
-    <div class="pnl-result">
-      <div class="pnl-result-item">
-        <span class="pnl-result-label">Position P&L (Entry → Exit)</span>
-        <span class="pnl-result-value ${actualPnl ? pnlClass(actualPnl.dollar) : 'neutral'}">${actualPnl ? fmtUSD(actualPnl.dollar) : '—'}</span>
-      </div>
-      <div class="pnl-divider"></div>
-      <div class="pnl-result-item">
-        <span class="pnl-result-label">Return %</span>
-        <span class="pnl-result-value ${actualPnl ? pnlClass(actualPnl.dollar) : 'neutral'}">${actualPnl ? fmtPct(actualPnl.pct) : '—'}</span>
-      </div>
-      <div class="pnl-divider"></div>
-      <div class="pnl-result-item">
-        <span class="pnl-result-label">Best P&L (Best Entry → Best Exit)</span>
-        <span class="pnl-result-value ${bestPnl ? pnlClass(bestPnl.dollar) : 'neutral'}">${bestPnl ? fmtUSD(bestPnl.dollar) : '—'}</span>
-      </div>
-      <div class="pnl-divider"></div>
-      <div class="pnl-result-item">
-        <span class="pnl-result-label">Best Return %</span>
-        <span class="pnl-result-value ${bestPnl ? pnlClass(bestPnl.dollar) : 'neutral'}">${bestPnl ? fmtPct(bestPnl.pct) : '—'}</span>
-      </div>
-    </div>
-
-    <div class="pnl-formula">
-      <div class="pnl-formula-title">How P&L is calculated</div>
-      <div class="pnl-formula-text">
-        Position size = <b>$${posSize > 0 ? posSize.toLocaleString() : '___'}</b> per leg
-        (total capital deployed: <b>$${posSize > 0 ? (posSize * 2).toLocaleString() : '___'}</b>)<br>
-        <b>LONG</b> ${longCoin} P&L = posSize × (exit_price / entry_price − 1)${actualPnl ? ` = <span class="${pnlClass(actualPnl.longPnl)}">${fmtUSD(actualPnl.longPnl)}</span>` : ''}<br>
-        <b>SHORT</b> ${shortCoin} P&L = posSize × (1 − exit_price / entry_price)${actualPnl ? ` = <span class="${pnlClass(actualPnl.shortPnl)}">${fmtUSD(actualPnl.shortPnl)}</span>` : ''}<br>
-        <b>Total P&L</b> = LONG P&L + SHORT P&L${actualPnl ? ` = <span class="${pnlClass(actualPnl.dollar)}">${fmtUSD(actualPnl.dollar)}</span>` : ''}<br>
-        <b>Return %</b> = Total P&L / posSize × 100${actualPnl ? ` = <span class="${pnlClass(actualPnl.dollar)}">${fmtPct(actualPnl.pct)}</span>` : ''}
+        ${cardRow('Spread', fmtSpread$(bestExitSpread))}
+        <div class="pnl-card-separator"></div>
+        ${cardRow('Spread change', fmtSpread$(bestExitSpread - bestEntrySpread))}
       </div>
     </div>
   `;
