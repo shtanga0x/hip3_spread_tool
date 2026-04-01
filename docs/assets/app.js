@@ -352,6 +352,8 @@ async function loadData() {
     syncCrosshairs(spreadChart, fundingChart);
 
     $chartsSection.style.display = '';
+    $pnlSection.style.display = '';
+    renderPnL();
     setStatus(`Loaded ${candles1.length} + ${candles2.length} candles, ${fd1.length} + ${fd2.length} funding points`);
   } catch (e) {
     setStatus('Error: ' + e.message, 'error');
@@ -422,6 +424,206 @@ $fileUpload.addEventListener('change', async (e) => {
   $fileUpload.value = '';
 });
 
+// ── PnL Analysis ──
+
+const $positionSize = document.getElementById('input-position-size');
+const $pnlSection = document.getElementById('pnl-section');
+const $pnlBody = document.getElementById('pnl-body');
+
+// Only allow integers in position size input
+$positionSize.addEventListener('input', () => {
+  $positionSize.value = $positionSize.value.replace(/[^0-9]/g, '');
+  renderPnL();
+});
+
+function coinLink(coin) {
+  return `https://app.hyperliquid.xyz/trade/${coin}`;
+}
+
+function fmtUSD(v) {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? '-' : v > 0 ? '+' : '';
+  if (abs >= 1000) return sign + '$' + abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return sign + '$' + abs.toFixed(2);
+}
+
+function fmtPct(v) {
+  const sign = v < 0 ? '' : '+';
+  return sign + v.toFixed(2) + '%';
+}
+
+function fmtPrice(v) {
+  if (Math.abs(v) >= 100) return v.toFixed(2);
+  if (Math.abs(v) >= 1) return v.toFixed(4);
+  return v.toFixed(6);
+}
+
+function fmtSpreadEffect(v) {
+  const sign = v >= 0 ? '+' : '-';
+  const cls = v >= 0 ? 'positive' : 'negative';
+  return `<span class="spread-effect ${cls}">${sign}${Math.abs(v).toFixed(4)}</span>`;
+}
+
+function fmtTime(tsMs) {
+  const d = new Date(tsMs);
+  return d.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+}
+
+function getAlignedSpreadData() {
+  const { candles1, candles2, spreadSwapped } = state;
+  const map2 = new Map();
+  candles2.forEach(c => map2.set(c.t, c));
+
+  const aligned = [];
+  for (const c1 of candles1) {
+    const c2 = map2.get(c1.t);
+    if (!c2) continue;
+    const p1 = parseFloat(c1.c);
+    const p2 = parseFloat(c2.c);
+    const spread = spreadSwapped ? (p1 - p2) : (p2 - p1);
+    aligned.push({ t: c1.t, p1, p2, spread });
+  }
+  return aligned;
+}
+
+function renderPnL() {
+  const aligned = getAlignedSpreadData();
+  if (aligned.length < 2) {
+    $pnlBody.innerHTML = '<div style="padding:8px;color:#8b949e;font-size:12px;">Not enough data</div>';
+    return;
+  }
+
+  const posSize = parseInt($positionSize.value) || 0;
+  const { spreadSwapped, coin1, coin2 } = state;
+
+  // Long side buys the higher-spread asset, short side sells the lower
+  // If not swapped: spread = coin2 - coin1 → LONG coin2, SHORT coin1
+  // If swapped:     spread = coin1 - coin2 → LONG coin1, SHORT coin2
+  const longCoin = spreadSwapped ? coin1 : coin2;
+  const shortCoin = spreadSwapped ? coin2 : coin1;
+
+  const entry = aligned[0];
+  const exit = aligned[aligned.length - 1];
+
+  // Best entry = min spread (cheapest to open), best exit = max spread
+  let bestEntry = aligned[0];
+  let bestExit = aligned[0];
+  for (const pt of aligned) {
+    if (pt.spread < bestEntry.spread) bestEntry = pt;
+    if (pt.spread > bestExit.spread) bestExit = pt;
+  }
+
+  // Prices for long/short legs
+  const longEntryP = spreadSwapped ? entry.p1 : entry.p2;
+  const shortEntryP = spreadSwapped ? entry.p2 : entry.p1;
+  const longExitP = spreadSwapped ? exit.p1 : exit.p2;
+  const shortExitP = spreadSwapped ? exit.p2 : exit.p1;
+
+  // PnL calc (equal $ notional each side)
+  let pnlDollar = 0;
+  let pnlPct = 0;
+  if (posSize > 0 && longEntryP > 0 && shortEntryP > 0) {
+    const longPnl = posSize * (longExitP / longEntryP - 1);
+    const shortPnl = posSize * (1 - shortExitP / shortEntryP);
+    pnlDollar = longPnl + shortPnl;
+    pnlPct = (pnlDollar / posSize) * 100;
+  }
+
+  // Spread effects
+  const entrySpreadEffect = entry.spread;
+  const exitSpreadEffect = exit.spread;
+  const bestEntryEffect = bestEntry.spread - entry.spread;  // negative = better (you saved)
+  const bestExitEffect = bestExit.spread - exit.spread;     // positive = better (you gained)
+
+  // Best-entry PnL (what if you entered at best entry and exited at best exit)
+  const bestLongEntryP = spreadSwapped ? bestEntry.p1 : bestEntry.p2;
+  const bestShortEntryP = spreadSwapped ? bestEntry.p2 : bestEntry.p1;
+  const bestLongExitP = spreadSwapped ? bestExit.p1 : bestExit.p2;
+  const bestShortExitP = spreadSwapped ? bestExit.p2 : bestExit.p1;
+  let bestPnlDollar = 0;
+  let bestPnlPct = 0;
+  if (posSize > 0 && bestLongEntryP > 0 && bestShortEntryP > 0) {
+    const bLong = posSize * (bestLongExitP / bestLongEntryP - 1);
+    const bShort = posSize * (1 - bestShortExitP / bestShortEntryP);
+    bestPnlDollar = bLong + bShort;
+    bestPnlPct = (bestPnlDollar / posSize) * 100;
+  }
+
+  const pnlClass = pnlDollar > 0 ? 'profit' : pnlDollar < 0 ? 'loss' : 'neutral';
+  const bestPnlClass = bestPnlDollar > 0 ? 'profit' : bestPnlDollar < 0 ? 'loss' : 'neutral';
+
+  $pnlBody.innerHTML = `
+    <div class="pnl-position-row">
+      <div class="leg">
+        <span class="leg-label long">Long</span>
+        <a href="${coinLink(longCoin)}" target="_blank" rel="noopener">${longCoin}</a>
+      </div>
+      <div class="leg">
+        <span class="leg-label short">Short</span>
+        <a href="${coinLink(shortCoin)}" target="_blank" rel="noopener">${shortCoin}</a>
+      </div>
+    </div>
+
+    <div class="pnl-grid">
+      <div class="pnl-card">
+        <div class="pnl-card-label">Entry (First)</div>
+        <div class="pnl-card-time">${fmtTime(entry.t)}</div>
+        <div class="pnl-card-row"><span class="label">${longCoin}</span><span class="value">${fmtPrice(longEntryP)}</span></div>
+        <div class="pnl-card-row"><span class="label">${shortCoin}</span><span class="value">${fmtPrice(shortEntryP)}</span></div>
+        <div class="pnl-card-row"><span class="label">Spread</span><span class="value">${fmtSpreadEffect(entrySpreadEffect)}</span></div>
+      </div>
+
+      <div class="pnl-card highlight-best-entry">
+        <div class="pnl-card-label">Best Entry</div>
+        <div class="pnl-card-time">${fmtTime(bestEntry.t)}</div>
+        <div class="pnl-card-row"><span class="label">${longCoin}</span><span class="value">${fmtPrice(spreadSwapped ? bestEntry.p1 : bestEntry.p2)}</span></div>
+        <div class="pnl-card-row"><span class="label">${shortCoin}</span><span class="value">${fmtPrice(spreadSwapped ? bestEntry.p2 : bestEntry.p1)}</span></div>
+        <div class="pnl-card-row"><span class="label">Spread</span><span class="value">${fmtSpreadEffect(bestEntry.spread)}</span></div>
+        <div class="pnl-card-row"><span class="label">vs Entry</span>${fmtSpreadEffect(bestEntryEffect)}</div>
+      </div>
+
+      <div class="pnl-card highlight-best-exit">
+        <div class="pnl-card-label">Best Exit</div>
+        <div class="pnl-card-time">${fmtTime(bestExit.t)}</div>
+        <div class="pnl-card-row"><span class="label">${longCoin}</span><span class="value">${fmtPrice(spreadSwapped ? bestExit.p1 : bestExit.p2)}</span></div>
+        <div class="pnl-card-row"><span class="label">${shortCoin}</span><span class="value">${fmtPrice(spreadSwapped ? bestExit.p2 : bestExit.p1)}</span></div>
+        <div class="pnl-card-row"><span class="label">Spread</span><span class="value">${fmtSpreadEffect(bestExit.spread)}</span></div>
+        <div class="pnl-card-row"><span class="label">vs Exit</span>${fmtSpreadEffect(bestExitEffect)}</div>
+      </div>
+
+      <div class="pnl-card">
+        <div class="pnl-card-label">Exit (Last)</div>
+        <div class="pnl-card-time">${fmtTime(exit.t)}</div>
+        <div class="pnl-card-row"><span class="label">${longCoin}</span><span class="value">${fmtPrice(longExitP)}</span></div>
+        <div class="pnl-card-row"><span class="label">${shortCoin}</span><span class="value">${fmtPrice(shortExitP)}</span></div>
+        <div class="pnl-card-row"><span class="label">Spread</span><span class="value">${fmtSpreadEffect(exitSpreadEffect)}</span></div>
+      </div>
+    </div>
+
+    <div class="pnl-result">
+      <div class="pnl-result-item">
+        <span class="pnl-result-label">Position P&L (Entry → Exit)</span>
+        <span class="pnl-result-value ${pnlClass}">${posSize > 0 ? fmtUSD(pnlDollar) : '—'}</span>
+      </div>
+      <div class="pnl-divider"></div>
+      <div class="pnl-result-item">
+        <span class="pnl-result-label">Return %</span>
+        <span class="pnl-result-value ${pnlClass}">${posSize > 0 ? fmtPct(pnlPct) : '—'}</span>
+      </div>
+      <div class="pnl-divider"></div>
+      <div class="pnl-result-item">
+        <span class="pnl-result-label">Best P&L (Best Entry → Best Exit)</span>
+        <span class="pnl-result-value ${bestPnlClass}">${posSize > 0 ? fmtUSD(bestPnlDollar) : '—'}</span>
+      </div>
+      <div class="pnl-divider"></div>
+      <div class="pnl-result-item">
+        <span class="pnl-result-label">Best Return %</span>
+        <span class="pnl-result-value ${bestPnlClass}">${posSize > 0 ? fmtPct(bestPnlPct) : '—'}</span>
+      </div>
+    </div>
+  `;
+}
+
 // ── Event listeners ──
 
 $load.addEventListener('click', loadData);
@@ -432,14 +634,14 @@ $upload.addEventListener('click', uploadConfig);
 $swapBtn.addEventListener('click', () => {
   state.spreadSwapped = !state.spreadSwapped;
   $swapBtn.textContent = state.spreadSwapped ? 'Swap B↔A' : 'Swap A↔B';
-  if (state.candles1.length) renderSpread();
+  if (state.candles1.length) { renderSpread(); renderPnL(); }
 });
 
 $candleLineBtn.addEventListener('click', () => {
   state.candleMode = !state.candleMode;
   $candleLineBtn.textContent = state.candleMode ? 'Candle' : 'Line';
   $candleLineBtn.classList.toggle('active', state.candleMode);
-  if (state.candles1.length) renderSpread();
+  if (state.candles1.length) { renderSpread(); renderPnL(); }
 });
 
 // Enter to load
