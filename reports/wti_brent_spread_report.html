@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>WTI-Brent Spread: Projection Report (April 2026)</title>
+<style>
+  @page { margin: 20mm 16mm; size: A4; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+    color: #1a1a2e;
+    background: #fff;
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 0;
+  }
+  .page { padding: 0 4px; }
+  h1 {
+    font-size: 22px;
+    color: #0f3460;
+    border-bottom: 3px solid #0f3460;
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 14px;
+  }
+  h2 {
+    font-size: 15px;
+    color: #16213e;
+    margin: 14px 0 6px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 3px;
+  }
+  h3 {
+    font-size: 12px;
+    color: #0f3460;
+    margin: 10px 0 4px;
+  }
+  p { margin-bottom: 6px; }
+  .highlight-box {
+    background: #f0f4ff;
+    border-left: 4px solid #0f3460;
+    padding: 8px 12px;
+    margin: 8px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .highlight-box strong { color: #0f3460; }
+  .green { color: #0a7c42; font-weight: 700; }
+  .red { color: #c0392b; font-weight: 700; }
+  .orange { color: #d35400; font-weight: 700; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 10.5px;
+  }
+  th {
+    background: #16213e;
+    color: #fff;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 10px;
+  }
+  td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  tr:nth-child(even) td { background: #f8f9fa; }
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 8px 0;
+  }
+  .scenario-box {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .scenario-box h4 {
+    font-size: 11px;
+    margin-bottom: 4px;
+    color: #16213e;
+  }
+  .scenario-box ul { padding-left: 16px; margin: 4px 0; }
+  .scenario-box li { margin-bottom: 2px; }
+  .projection-card {
+    display: inline-block;
+    width: 30%;
+    vertical-align: top;
+    border: 2px solid #0f3460;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 4px 1%;
+    text-align: center;
+  }
+  .projection-card .horizon {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #666;
+  }
+  .projection-card .spread {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0f3460;
+    margin: 4px 0;
+  }
+  .projection-card .dollar {
+    font-size: 13px;
+    color: #333;
+  }
+  .projection-card .driver {
+    font-size: 9px;
+    color: #888;
+    margin-top: 4px;
+  }
+  .summary-table td:first-child { font-weight: 700; }
+  .footer {
+    margin-top: 16px;
+    padding-top: 8px;
+    border-top: 1px solid #ccc;
+    font-size: 9px;
+    color: #999;
+  }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  ul { padding-left: 18px; }
+  li { margin-bottom: 3px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>WTI-Brent Spread: Projection Report</h1>
+<div class="subtitle">April 2026 &nbsp;|&nbsp; Prepared for spread trade analysis on HIP-3 Hyperliquid &nbsp;|&nbsp; CL vs BRENTOIL</div>
+
+<h2>Current Situation</h2>
+
+<div class="highlight-box">
+  <strong>Current Spread: -0.67%</strong> (~$2.35/bbl, Brent premium) &mdash; historically <strong>very narrow</strong>. Normal range is $3&ndash;$5.<br>
+  Brent ~$105.27 &nbsp;|&nbsp; WTI ~$102.92
+</div>
+
+<p><strong>Why it's compressed now:</strong></p>
+<ul>
+  <li><strong>172M barrel SPR release</strong> flooding US domestic supply &rarr; pushes WTI down</li>
+  <li>Trump's "buy American oil" rhetoric + eased Iran sanctions (30-day OFAC waiver through April 19) &rarr; more global supply, less Brent premium</li>
+  <li>Post-Hormuz crisis normalization &mdash; spread blew out to <span class="red">$12.50 (~-16%)</span> in mid-March, now mean-reverting</li>
+</ul>
+
+<h2>Supply &amp; Demand Dynamics</h2>
+
+<div class="two-col">
+  <div>
+    <h3>Bullish for Wider Spread (Brent premium expands)</h3>
+    <table>
+      <tr><th>Factor</th><th>Impact</th></tr>
+      <tr><td>Strait of Hormuz contested</td><td>Brent carries war premium; WTI insulated as domestic</td></tr>
+      <tr><td>OPEC+ holding 3.24M bbl/day cuts</td><td>Supports Brent more than WTI</td></tr>
+      <tr><td>Permian pipelines at 99% util.</td><td>Caps US exports &rarr; WTI trapped domestically</td></tr>
+      <tr><td>US crude exports declined 2025</td><td>4.0M bbl/day (first drop since 2021)</td></tr>
+      <tr><td>Qatar Ras Laffan LNG damaged</td><td>Gas-to-oil substitution lifts Brent</td></tr>
+    </table>
+  </div>
+  <div>
+    <h3>Bullish for Narrow Spread (WTI catches up)</h3>
+    <table>
+      <tr><th>Factor</th><th>Impact</th></tr>
+      <tr><td>Trump energy policy</td><td>Expedited permits + export push &rarr; WTI strengthens</td></tr>
+      <tr><td>Cushing at critical lows (~520K bbl)</td><td>Potential WTI short squeeze</td></tr>
+      <tr><td>Iran sanctions eased (temp)</td><td>More seaborne supply &rarr; Brent premium compresses</td></tr>
+      <tr><td>SPR discharge fades by Q3</td><td>Temporary WTI suppression ending</td></tr>
+      <tr><td>Corpus Christi channel deepened</td><td>54ft (2025) &rarr; larger tanker loading</td></tr>
+    </table>
+  </div>
+</div>
+
+<h2>Projections</h2>
+
+<div style="text-align:center; margin: 12px 0;">
+  <div class="projection-card">
+    <div class="horizon">1 Month (May 2026)</div>
+    <div class="spread" style="color:#d35400;">-2%</div>
+    <div class="dollar">~$4&ndash;5/bbl</div>
+    <div class="driver">Iran waiver expiry + SPR peak flow</div>
+  </div>
+  <div class="projection-card">
+    <div class="horizon">1 Year (April 2027)</div>
+    <div class="spread" style="color:#c0392b;">-3%</div>
+    <div class="dollar">~$4&ndash;5/bbl (base) | $8&ndash;10 (bear)</div>
+    <div class="driver">Post-war norm + permanent risk premium</div>
+  </div>
+  <div class="projection-card">
+    <div class="horizon">5 Years (2031)</div>
+    <div class="spread" style="color:#8e44ad;">-3 to -4%</div>
+    <div class="dollar">~$4&ndash;6/bbl</div>
+    <div class="driver">Shale plateau + structural Gulf premium</div>
+  </div>
+</div>
+
+<h3>1 Month &mdash; May 2026: Spread widens to -1% to -3%</h3>
+<p>Current -0.67% is artificially compressed by SPR release and Iran waiver. Iran waiver expires April 19 &mdash; if not renewed, Brent jumps on tighter seaborne supply. SPR peak flow hits Cushing, temporarily depressing WTI further. Hormuz still unresolved &mdash; insurance costs for tankers keep Brent premium elevated. Goldman sees Brent $85 avg, WTI $79 &rarr; implied spread ~$6.</p>
+
+<h3>1 Year &mdash; April 2027: Two scenarios diverge</h3>
+<div class="scenario-grid">
+  <div class="scenario-box">
+    <h4><span class="green">Scenario A &mdash; Hormuz Reopens (60% prob.)</span></h4>
+    <ul>
+      <li>Spread normalizes to <strong>-2% to -3%</strong> ($3&ndash;5)</li>
+      <li>Goldman: Gulf risk "permanently repriced" &rarr; +$2&ndash;3 structural Brent premium</li>
+      <li>OPEC+ unwinds remaining cuts &rarr; 2.8M bbl/day surplus (JPMorgan)</li>
+      <li>Brent $64&ndash;80, WTI $61&ndash;74</li>
+      <li>US shale declining for first time (EIA: 13.5M &rarr; 13.4M bbl/day)</li>
+    </ul>
+  </div>
+  <div class="scenario-box">
+    <h4><span class="red">Scenario B &mdash; Prolonged Instability (40% prob.)</span></h4>
+    <ul>
+      <li>Hormuz remains contested, periodic disruptions</li>
+      <li>Brent stays $90&ndash;110 with risk premium</li>
+      <li>WTI limited by export bottlenecks</li>
+      <li>Spread widens to <strong>-5% to -8%</strong> ($6&ndash;10)</li>
+      <li>Similar to 2011&ndash;2014 dynamics</li>
+    </ul>
+  </div>
+</div>
+
+<h3>5 Years &mdash; 2031: Spread settles -3% to -4%</h3>
+<div class="two-col">
+  <div>
+    <p><strong>Compressing forces:</strong></p>
+    <ul>
+      <li>EVs displace 5M+ bbl/day by 2030 (IEA) &rarr; both benchmarks fall</li>
+      <li>Deepwater export terminals may finally get built (SPOT, Texas GulfLink)</li>
+      <li>Peak demand narrative &rarr; less geopolitical premium</li>
+    </ul>
+  </div>
+  <div>
+    <p><strong>Widening forces:</strong></p>
+    <ul>
+      <li>US shale peaked/plateauing &rarr; WTI structurally weaker</li>
+      <li>Permanent Hormuz risk repricing &rarr; Brent $3&ndash;5 war premium</li>
+      <li>No new Permian-to-Gulf pipelines under development</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Summary</h2>
+<table class="summary-table">
+  <tr><th>Horizon</th><th>Spread %</th><th>Spread $</th><th>vs Today (-0.67%)</th><th>Key Driver</th></tr>
+  <tr><td>1 month</td><td class="orange">-2%</td><td>~$4&ndash;5</td><td>Widens</td><td>Iran waiver expiry + SPR peak</td></tr>
+  <tr><td>1 year (base)</td><td class="red">-3%</td><td>~$4&ndash;5</td><td>Widens</td><td>Post-war normalization + risk premium</td></tr>
+  <tr><td>1 year (bear)</td><td class="red">-6%</td><td>~$8&ndash;10</td><td>Widens significantly</td><td>Prolonged Hormuz disruption</td></tr>
+  <tr><td>5 year</td><td style="color:#8e44ad;font-weight:700;">-3 to -4%</td><td>~$4&ndash;6</td><td>Widens modestly</td><td>Shale plateau + Gulf premium</td></tr>
+</table>
+
+<h2>HIP-3 Trading Implication</h2>
+<div class="highlight-box">
+  At <strong>-0.67%</strong> today, the spread is near the <strong>tight end of the historical range</strong>. Mean reversion to -3% is high probability.<br><br>
+  <strong>Now:</strong> SHORT CL / LONG BRENT (bet on spread widening back to normal)<br>
+  <strong>At -8% or wider:</strong> LONG CL / SHORT BRENT (bet on mean reversion)<br>
+  <strong>Funding:</strong> Check which dex (cash vs xyz) pays higher funding &mdash; that's your carry while waiting for convergence.
+</div>
+
+<div class="footer">
+  Sources: EIA STEO March 2026, IEA Oil Market Report March 2026, Goldman Sachs commodities research, JPMorgan oil outlook, Kpler shipping data, OPEC+ press releases, Columbia CGEP.
+  <br>Generated April 2026. This is analysis, not financial advice.
+</div>
+
+</div>
+</body>
+</html>
