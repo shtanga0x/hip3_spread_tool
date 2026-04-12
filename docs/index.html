@@ -23,12 +23,15 @@
     <!-- Input section -->
     <div id="input-section">
       <div class="input-row">
-        <label>Asset 1:</label>
-        <input type="text" id="input-asset1" placeholder="https://app.hyperliquid.xyz/trade/cash:TSLA or cash:TSLA" />
+        <span class="input-leg-label long">Long</span>
+        <input type="text" id="input-asset1" placeholder="xyz:BRENTOIL or trade URL" />
+      </div>
+      <div class="flip-row">
+        <button id="btn-flip-direction" title="Flip LONG ↕ SHORT">↕</button>
       </div>
       <div class="input-row">
-        <label>Asset 2:</label>
-        <input type="text" id="input-asset2" placeholder="https://app.hyperliquid.xyz/trade/xyz:TSLA or xyz:TSLA" />
+        <span class="input-leg-label short">Short</span>
+        <input type="text" id="input-asset2" placeholder="xyz:WTIOIL or trade URL" />
       </div>
       <div class="input-row controls-row">
         <div class="timeframe-group">

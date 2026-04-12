@@ -77,6 +77,55 @@ body {
   min-width: 70px;
 }
 
+.input-leg-label {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-width: 64px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.input-leg-label.long {
+  background: #23863633;
+  color: #3fb950;
+  border: 1px solid #23863666;
+}
+
+.input-leg-label.short {
+  background: #f8514933;
+  color: #f85149;
+  border: 1px solid #f8514966;
+}
+
+.flip-row {
+  display: flex;
+  align-items: center;
+  margin: 2px 0;
+}
+
+#btn-flip-direction {
+  width: 64px;
+  padding: 3px 0;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  color: #8b949e;
+  font-size: 16px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+#btn-flip-direction:hover {
+  background: #30363d;
+  color: #c9d1d9;
+  border-color: #58a6ff;
+}
+
 .input-row input[type="text"] {
   flex: 1;
   padding: 6px 10px;

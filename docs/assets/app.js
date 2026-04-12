@@ -43,6 +43,7 @@ const $load = document.getElementById('btn-load');
 const $save = document.getElementById('btn-save');
 const $upload = document.getElementById('btn-upload');
 const $fileUpload = document.getElementById('file-upload');
+const $flipBtn = document.getElementById('btn-flip-direction');
 const $swapBtn = document.getElementById('btn-swap-spread');
 const $candleLineBtn = document.getElementById('btn-candle-line');
 const $spreadUnitBtn = document.getElementById('btn-spread-unit');
@@ -788,18 +789,14 @@ function renderPnL() {
   const posSize = parseInt($positionSize.value) || 0;
   const { coin1, coin2, fundingData1, fundingData2 } = state;
 
-  // Determine optimal LONG/SHORT from funding
-  const fundingA = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData1, fundingData2);
-  const fundingB = computeFundingPnl(posSize > 0 ? posSize : 10000, fundingData2, fundingData1);
-
-  const longCoin1Better = fundingA.total >= fundingB.total;
-  const longCoin = longCoin1Better ? coin1 : coin2;
-  const shortCoin = longCoin1Better ? coin2 : coin1;
-
-  function longP(pt) { return longCoin === coin1 ? pt.p1 : pt.p2; }
-  function shortP(pt) { return longCoin === coin1 ? pt.p2 : pt.p1; }
-
-  const funding = posSize > 0 ? (longCoin1Better ? fundingA : fundingB) : { total: 0, longTotal: 0, shortTotal: 0 };
+  // coin1 is always LONG, coin2 is always SHORT (user controls via ↕ button)
+  const longCoin = coin1;
+  const shortCoin = coin2;
+  function longP(pt) { return pt.p1; }
+  function shortP(pt) { return pt.p2; }
+  const funding = posSize > 0
+    ? computeFundingPnl(posSize, fundingData1, fundingData2)
+    : { total: 0, longTotal: 0, shortTotal: 0 };
   const fundingPct = posSize > 0 ? (funding.total / posSize) * 100 : 0;
 
   // APR = funding return annualized
@@ -865,7 +862,6 @@ function renderPnL() {
         <span class="leg-label short">Short</span>
         <a href="${coinLink(shortCoin)}" target="_blank" rel="noopener">${shortCoin}</a>
       </div>
-      <div class="leg direction-note">Direction chosen to maximize funding P&L</div>
     </div>
 
     <div class="pnl-grid-4">
@@ -983,12 +979,30 @@ function renderPnL() {
   if (takerEl) takerEl.addEventListener('input', () => renderPnL());
 
   // Render cumulative chart
-  renderCumulativeChart(longCoin, longCoin === coin1);
+  renderCumulativeChart(longCoin, true);
 }
 
 // ── Event listeners ──
 
 $load.addEventListener('click', loadData);
+
+$flipBtn.addEventListener('click', () => {
+  // Swap the input field values
+  const tmp = $asset1.value;
+  $asset1.value = $asset2.value;
+  $asset2.value = tmp;
+
+  // If data is already loaded, swap state in-place and re-render without a reload
+  if (state.candles1.length || state.candles2.length) {
+    [state.coin1, state.coin2] = [state.coin2, state.coin1];
+    [state.candles1, state.candles2] = [state.candles2, state.candles1];
+    [state.fundingData1, state.fundingData2] = [state.fundingData2, state.fundingData1];
+    state.spreadSwapped = false;
+    $swapBtn.textContent = 'Swap A↔B';
+    renderSpread();
+    renderPnL();
+  }
+});
 
 $save.addEventListener('click', saveSnapshot);
 $upload.addEventListener('click', uploadConfig);
