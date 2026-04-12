@@ -55,15 +55,30 @@ const $cumulativeLegend = document.getElementById('cumulative-legend');
 
 // ── Helpers ──
 
+// Returns { name, isSpot } — name is the bare token name, isSpot true for xyz: inputs
 function parseCoin(input) {
   const s = input.trim();
   const m = s.match(/trade\/([^/?#]+)/);
-  if (m) {
-    const coin = m[1];
-    return coin.startsWith('xyz:') ? coin.slice(4) : coin;
+  const raw = m ? m[1] : s;
+  if (raw.startsWith('xyz:')) return { name: raw.slice(4), isSpot: true };
+  return { name: raw, isSpot: false };
+}
+
+// Resolves a spot token name (e.g. "BRENTOIL") to its @N candleSnapshot identifier
+let _spotMetaCache = null;
+async function resolveSpotCoin(tokenName) {
+  if (!_spotMetaCache) {
+    _spotMetaCache = await apiPost({ type: 'spotMeta' });
   }
-  if (s.startsWith('xyz:')) return s.slice(4);
-  return s;
+  const tokens = _spotMetaCache.tokens || [];
+  const universe = _spotMetaCache.universe || [];
+  // Find the token index for the given name
+  const token = tokens.find(t => t.name.toUpperCase() === tokenName.toUpperCase());
+  if (!token) throw new Error(`Spot token "${tokenName}" not found in spotMeta`);
+  // Find the market in universe that has this token as base (first in tokens array)
+  const mktIdx = universe.findIndex(u => u.tokens && u.tokens[0] === token.index);
+  if (mktIdx === -1) throw new Error(`No spot market found for token "${tokenName}"`);
+  return `@${mktIdx}`;
 }
 
 function setStatus(msg, cls) {
@@ -454,15 +469,15 @@ function syncCrosshair(src, targets, refSeries) {
 // ── Load data ──
 
 async function loadData() {
-  const coin1 = parseCoin($asset1.value);
-  const coin2 = parseCoin($asset2.value);
-  if (!coin1 || !coin2) {
+  const parsed1 = parseCoin($asset1.value);
+  const parsed2 = parseCoin($asset2.value);
+  if (!parsed1.name || !parsed2.name) {
     setStatus('Please enter both asset links', 'error');
     return;
   }
 
-  state.coin1 = coin1;
-  state.coin2 = coin2;
+  state.coin1 = parsed1.name;
+  state.coin2 = parsed2.name;
   state.interval = $interval.value;
   state.period = parseInt($period.value);
 
@@ -473,11 +488,15 @@ async function loadData() {
   setStatus('Loading data...', 'loading');
 
   try {
+    // Spot tokens need @N market index for candleSnapshot; no funding rates exist
+    const apiCoin1 = parsed1.isSpot ? await resolveSpotCoin(parsed1.name) : parsed1.name;
+    const apiCoin2 = parsed2.isSpot ? await resolveSpotCoin(parsed2.name) : parsed2.name;
+
     const [candles1, candles2, funding1, funding2] = await Promise.all([
-      fetchAllCandles(coin1, state.interval, startTime, now),
-      fetchAllCandles(coin2, state.interval, startTime, now),
-      fetchFunding(coin1, startTime, now),
-      fetchFunding(coin2, startTime, now),
+      fetchAllCandles(apiCoin1, state.interval, startTime, now),
+      fetchAllCandles(apiCoin2, state.interval, startTime, now),
+      parsed1.isSpot ? Promise.resolve([]) : fetchFunding(parsed1.name, startTime, now),
+      parsed2.isSpot ? Promise.resolve([]) : fetchFunding(parsed2.name, startTime, now),
     ]);
 
     state.candles1 = candles1;
