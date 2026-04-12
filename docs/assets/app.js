@@ -58,8 +58,11 @@ const $cumulativeLegend = document.getElementById('cumulative-legend');
 function parseCoin(input) {
   const s = input.trim();
   const m = s.match(/trade\/([^/?#]+)/);
-  if (m) return m[1];
-  if (s.includes(':')) return s;
+  if (m) {
+    const coin = m[1];
+    return coin.startsWith('xyz:') ? coin.slice(4) : coin;
+  }
+  if (s.startsWith('xyz:')) return s.slice(4);
   return s;
 }
 
