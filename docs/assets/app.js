@@ -76,7 +76,19 @@ async function apiPost(body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const errBody = await res.json();
+      if (typeof errBody === 'string') detail = errBody;
+      else if (errBody?.error) detail = errBody.error;
+      else if (errBody !== null && errBody !== undefined) detail = JSON.stringify(errBody);
+    } catch {
+      try { detail = (await res.text()).trim(); } catch {}
+    }
+    const hint = res.status === 500 && !detail ? ' — invalid coin name or unsupported market' : '';
+    throw new Error(`API ${res.status}: ${detail || res.statusText}${hint}`);
+  }
   return res.json();
 }
 
